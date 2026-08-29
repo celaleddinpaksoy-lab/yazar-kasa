@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Yazar kasa (POS) + stok + borç/taksit uygulaması. **Durum: Adım 11 (son geliştirme adımı) tamam — Yedekleme (günlük otomatik açılışta + manuel tek tık + içe aktarma + geri yükleme: önce Muhafaza yedeği, bayrakla relaunch, açılışta swap), fiş/etiket yazdırma (@media print), güncelleme notu/e-altyapı (paketli sürümde electron-updater), uçtan uca defter tutarlılık testi geçti. Kalan tek iş: dağıtım — electron-builder.yml `owner` alanını doldurup build:mac/win ile release üretmek ve asıl makineye taşımak.**
+Yazar kasa (POS) + stok + borç/taksit uygulaması. **Durum: Adım 11 (son geliştirme adımı) tamam — Yedekleme (günlük otomatik açılışta + manuel tek tık + içe aktarma + geri yükleme: önce Muhafaza yedeği, bayrakla relaunch, açılışta swap), fiş/etiket yazdırma (@media print), güncelleme notu/e-altyapı (paketli sürümde electron-updater), uçtan uca defter tutarlılık testi geçti. Dağıtım tamam: CI (`v*` tag) tüm platformları üretip GitHub Releases'e yükler; macOS paketleri `scripts/macos-selfsign.sh` ile self-signed imzalanır ("hasar görmüş" hatası gider), ilk açılışta sağ tık→Aç gerekir.**
 
 ## Başlamadan önce OKU
 - **`PLAN.md`** — kapsam, modüller ve davranış kurallarının tek kaynağıdır. Kod yazmadan önce mutlaka oku. Plana aykırı kararlar verme; emin değilsen kullanıcıya sor.
@@ -65,6 +65,7 @@ Yazar kasa (POS) + stok + borç/taksit uygulaması. **Durum: Adım 11 (son geli�
   - Derlemede **taşınabilir (portable)** hedef olmalı — kopyalanınca çalışan, kurulum gerektirmeyen sürüm.
   - Yedek al/geri yükle (dosya olarak) veriyi makineden makineye taşımanın resmi yoludur.
 - **Windows paketi bu macOS'ta üretilemez** (better-sqlite3 kaynaktan çapraz derlenmez ve v13 için prebuilt yok). Windows paketi yalnızca Windows tarafında veya `.github/workflows/release.yml` (GitHub Actions, ücretsiz) ile üretilir: `v*` etiketi itilince tüm platformlar derlenir + GitHub Releases'e yüklenir (publish owner/repo'yu git origin'den otomatik çeker).
+- **macOS imzalama:** CI, `scripts/macos-selfsign.sh` ile self-signed kimlik kurup (üye/test kimliği: `CSC_NAME=YazarKasa Self-Signed`), electron-builder'a bu kimliği verir. Uygulama DMG/ZIP içinde geçerli imzayla dağıtılır → "hasar görmüş" hatası olmaz; yine de ilk açılışta **sağ tık → Aç** gerekir (self-signed, Apple Developer değil). `npm run build:mac` yerelde de bu kimlik varsa imzalar.
 - Yerel macOS paketi: `npm run build:mac` → `release/*.dmg` + `.zip` + `latest-mac.yml`.
 
 ## Kurulu sürümler (2026-08)

@@ -38,12 +38,26 @@ Veri dizini: `app.getPath('userData')` (işletim sisteminin uygulama veri klasö
 ## Dağıtım
 
 - Paket üretimi `.github/workflows/release.yml` (GitHub Actions) ile yapılır:
-  `v*` etiketi itildiğinde macOS (arm64 + Intel) ve Windows (nsis + portable)
+  `v*` etiketi itildiğinde macOS (Apple Silicon) ve Windows (nsis + portable)
   paketleri derlenir ve GitHub Releases'e yüklenir.
 - Kurulu uygulamalar electron-updater ile yeni sürümleri otomatik bulur
   (repo public olmalı).
 - Veriyi makineye taşımak: kaynak makinede **Yedek Al** → hedef makinede
   **Ayarlar → Yedekleme → dosyadan içe aktar / geri yükle**.
+
+### macOS kurulum notu (imzasız/self-signed sürüm)
+
+Uygulama Apple Developer sertifikasıyla imzalanmadığı için (bedava dağıtım;
+yayın kalitesi imza = Developer ID + notarization, yıllık ücretli) bazen
+"uygulama hasar görmüş, Çöp Kutusu'na taşıyın" uyarısı çıkar — bu bozuk
+dosyadan DEĞİL, imza uyumsuzluğundan kaynaklanır. Çözüm, ilk açılışta:
+
+1. Uygulamayı **sağ tık → Aç** ile başlat (tek seferlik izin), **veya**
+2. Terminalde `xattr -cr /Applications/YazarKasa.app` çalıştırıp ardından aç.
+
+Sonraki açılışlarda sorun olmaz. İmzalı yapı için CI, `scripts/macos-selfsign.sh`
+ile self-signed kimlik kurup uygulamayı bu kimlikle imzalar (imza bütünlüğü
+doğrulanır), bu da "hasar görmüş" hatasını ortadan kaldırır.
 
 ## Yapı
 

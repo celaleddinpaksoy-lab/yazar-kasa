@@ -19,7 +19,10 @@ jobs:
     name: macOS (Apple Silicon)
     runs-on: macos-latest
     env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Self-signed kimlik: scripts/macos-selfsign.sh üretir; electron-builder'a
+      # kimlik adını açıkça verir (Apple önekli olmayan adlar filtreye takılmasın diye).
+      CSC_NAME: YazarKasa Self-Signed
+      CSC_IDENTITY_AUTO_DISCOVERY: 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,8 +30,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build
+      - name: Self-signed imzalama kimliği kur
+        run: bash ./scripts/macos-selfsign.sh build.keychain
+      - name: Build (imzalı)
         run: npm run build:mac -- --publish never
+      - name: İmzayı doğrula (app + DMG içi)
+        run: |
+          set -euo pipefail
+          APP=release/mac-arm64/YazarKasa.app
+          codesign --verify --deep --strict "$APP" 2>&1
+          DMG=$(ls release/*.dmg | head -1)
+          hdiutil attach -nobrowse -readonly "$DMG" -mountpoint /tmp/ykverify >/dev/null
+          codesign --verify --deep --strict /tmp/ykverify/YazarKasa.app 2>&1
+          hdiutil detach /tmp/ykverify 2>/dev/null || true
       - name: Üretilen dosyaları yükle
         uses: actions/upload-artifact@v4
         with:
