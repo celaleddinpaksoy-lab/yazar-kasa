@@ -15,49 +15,42 @@ on:
   workflow_dispatch:
 
 jobs:
-  mac-arm64:
-    name: macOS (Apple Silicon)
-    runs-on: macos-latest
-    env:
-      # Self-signed kimlik: scripts/macos-selfsign.sh üretir; electron-builder'a
-      # kimlik adını açıkça verir (Apple önekli olmayan adlar filtreye takılmasın diye).
-      CSC_NAME: YazarKasa Self-Signed
-      CSC_IDENTITY_AUTO_DISCOVERY: 'true'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Self-signed imzalama kimliği kur
-        run: bash ./scripts/macos-selfsign.sh build.keychain
-      - name: Build (imzalı)
-        run: npm run build:mac -- --publish never
-      - name: İmzayı doğrula (app + DMG içi)
-        run: |
-          set -euo pipefail
-          APP=release/mac-arm64/YazarKasa.app
-          codesign --verify --deep --strict "$APP" 2>&1
-          DMG=$(ls release/*.dmg | head -1)
-          hdiutil attach -nobrowse -readonly "$DMG" -mountpoint /tmp/ykverify >/dev/null
-          codesign --verify --deep --strict /tmp/ykverify/YazarKasa.app 2>&1
-          hdiutil detach /tmp/ykverify 2>/dev/null || true
-      - name: Üretilen dosyaları yükle
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-mac-arm64
-          path: |
-            release/latest-mac.yml
-            release/*.dmg
-            release/*.zip
-            release/*.blockmap
-
-  # NOT: macOS Intel (x64) işi kaldırıldı — macos-13 runner'ı artık
-  # atanmıyor (kuyrukta 30+ dk kalıyor). Intel paketi gerekirse Intel bir
-  # Mac'te 'npm run build:mac' ile o makinede üretilir.
-  # İstenirse bu blok geri eklenebilir:
-  #   mac-x64: runs-on: macos-13, üsttekiyle aynı adımlar, name: dist-mac-x64
+  # NOT: macOS üretimi şu an kapalı (hedef Windows). Geri açmak için şu mac
+  # işi geri eklenir (macos-latest runner + scripts/macos-selfsign.sh + CSC_NAME
+  # ile imzalı build + İmzayı doğrula adımı + dist-mac-arm64 artifact'ı):
+  #   mac-arm64:
+  #     name: macOS (Apple Silicon)
+  #     runs-on: macos-latest
+  #     env:
+  #       CSC_NAME: YazarKasa Self-Signed
+  #       CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+  #     steps:
+  #       - uses: actions/checkout@v4
+  #       - uses: actions/setup-node@v4
+  #         with: { node-version: 22, cache: npm }
+  #       - run: npm ci
+  #       - name: Self-signed imzalama kimliği kur
+  #         run: bash ./scripts/macos-selfsign.sh build.keychain
+  #       - name: Build (imzalı)
+  #         run: npm run build:mac -- --publish never
+  #       - name: İmzayı doğrula (app + DMG içi)
+  #         run: |
+  #           set -euo pipefail
+  #           APP=release/mac-arm64/YazarKasa.app
+  #           codesign --verify --deep --strict "$APP" 2>&1
+  #           DMG=$(ls release/*.dmg | head -1)
+  #           hdiutil attach -nobrowse -readonly "$DMG" -mountpoint /tmp/ykverify >/dev/null
+  #           codesign --verify --deep --strict /tmp/ykverify/YazarKasa.app 2>&1
+  #           hdiutil detach /tmp/ykverify 2>/dev/null || true
+  #       - name: Üretilen dosyaları yükle
+  #         uses: actions/upload-artifact@v4
+  #         with:
+  #           name: dist-mac-arm64
+  #           path: |
+  #             release/latest-mac.yml
+  #             release/*.dmg
+  #             release/*.zip
+  #             release/*.blockmap
 
   windows:
     name: Windows x64
@@ -83,7 +76,7 @@ jobs:
   publish:
     name: GitHub Releases'e yükle
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [mac-arm64, windows]
+    needs: [windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write

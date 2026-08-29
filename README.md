@@ -38,16 +38,18 @@ Veri dizini: `app.getPath('userData')` (işletim sisteminin uygulama veri klasö
 ## Dağıtım
 
 - Paket üretimi `.github/workflows/release.yml` (GitHub Actions) ile yapılır:
-  `v*` etiketi itildiğinde macOS (Apple Silicon) ve Windows (nsis + portable)
-  paketleri derlenir ve GitHub Releases'e yüklenir.
+  `v*` etiketi itildiğinde **Windows** (nsis + portable) paketi derlenir ve
+  GitHub Releases'e yüklenir. macOS üretimi şu an kapalıdır; geri açmak için
+  CI'daki mac işi bloku geri eklenir (scripts/macos-selfsign.sh ile imzalı).
 - Kurulu uygulamalar electron-updater ile yeni sürümleri otomatik bulur
   (repo public olmalı).
 - Veriyi makineye taşımak: kaynak makinede **Yedek Al** → hedef makinede
   **Ayarlar → Yedekleme → dosyadan içe aktar / geri yükle**.
 
-### macOS kurulum notu (imzasız/self-signed sürüm)
+### macOS kurulum notu (şu an kapalı desteğe ilişkin arşiv notu)
 
-Uygulama Apple Developer sertifikasıyla imzalanmadığı için (bedava dağıtım;
+macOS üretimi şu an kapatıldı; bu bölüm geri açılırsa kullanılacak. Uygulama
+Apple Developer sertifikasıyla imzalanmadığı için (bedava dağıtım;
 yayın kalitesi imza = Developer ID + notarization, yıllık ücretli) bazen
 "uygulama hasar görmüş, Çöp Kutusu'na taşıyın" uyarısı çıkar — bu bozuk
 dosyadan DEĞİL, imza uyumsuzluğundan kaynaklanır. Çözüm, ilk açılışta:
