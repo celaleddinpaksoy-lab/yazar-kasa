@@ -1,5 +1,10 @@
 name: Release
 
+# GITHUB_TOKEN varsayılanı salt-okunur; paket(ler) GitHub Releases'e
+# yüklenebilsin diye contents yazma izni açık:
+permissions:
+  contents: write
+
 # Etiket itildiğinde (v*) veya elle (workflow_dispatch) her platform için
 # kurulum paketi üretilir ve GitHub Releases'e yüklenir.
 # Electron her platformda kendi native modülünü derlediği için her OS kendi
