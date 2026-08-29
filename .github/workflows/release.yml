@@ -1,14 +1,13 @@
 name: Release
 
-# GITHUB_TOKEN varsayılanı salt-okunur; paket(ler) GitHub Releases'e
-# yüklenebilsin diye contents yazma izni açık:
+# GITHUB_TOKEN varsayılanı salt-okunur; paketlenmiş sürümlerin GitHub
+# Releases'e yükleneceği 'publish' işinde contents yazma izni açık:
 permissions:
   contents: write
 
-# Etiket itildiğinde (v*) veya elle (workflow_dispatch) her platform için
-# kurulum paketi üretilir ve GitHub Releases'e yüklenir.
-# Electron her platformda kendi native modülünü derlediği için her OS kendi
-# runner'ında ve mimarisinde build edilmelidir (çapraz derleme desteklenmez).
+# Etiket itildiğinde (v*) veya elle (workflow_dispatch) her platform kendi
+# runner'ında native derleme ile paket üretir (çapraz derleme desteklenmez),
+# sonra tek 'publish' işi tüm dosyaları tek release'e yükler.
 on:
   push:
     tags:
@@ -28,13 +27,23 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build + publish
-        run: npm run build:mac -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  # NOT: macOS Intel (x64) job'u kaldırıldı — macos-13 runner'ı artık kullanılamıyor
-  # (kuyrukta 30+ dk kalıyor). Intel paketi gerekirse Intel bir Mac'te 'npm run
-  # build:mac' çalıştırılarak (o makinede native zincir tamam) üretilir.
+      - name: Build
+        run: npm run build:mac -- --publish never
+      - name: Üretilen dosyaları yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-mac-arm64
+          path: |
+            release/latest-mac.yml
+            release/*.dmg
+            release/*.zip
+            release/*.blockmap
+
+  # NOT: macOS Intel (x64) işi kaldırıldı — macos-13 runner'ı artık
+  # atanmıyor (kuyrukta 30+ dk kalıyor). Intel paketi gerekirse Intel bir
+  # Mac'te 'npm run build:mac' ile o makinede üretilir.
+  # İstenirse bu blok geri eklenebilir:
+  #   mac-x64: runs-on: macos-13, üsttekiyle aynı adımlar, name: dist-mac-x64
 
   windows:
     name: Windows x64
@@ -46,7 +55,41 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build + publish
-        run: npm run build:win -- --publish always
+      - name: Build
+        run: npm run build:win -- --publish never
+      - name: Üretilen dosyaları yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: |
+            release/latest.yml
+            release/*.exe
+            release/*.blockmap
+
+  publish:
+    name: GitHub Releases'e yükle
+    needs: [mac-arm64, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release oluştur
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF#refs/tags/}"
+          cd dist
+          ls -lh
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG zaten var; dosyalar ekleniyor."
+            gh release upload "$TAG" ./* --clobber
+          else
+            gh release create "$TAG" ./* \
+              --title "$TAG" \
+              --notes "YazarKasa otomatik dağıtım sürümü. Kurulum: admin/admin → Ayarlar → şifre değiştir."
+          fi
