@@ -32,24 +32,9 @@ jobs:
         run: npm run build:mac -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  mac-x64:
-    name: macOS (Intel)
-    # macos-13 hâlâ Intel (x64) runner sunuyor; yoksa bu iş değiştirilmeli.
-    runs-on: macos-13
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Build + publish
-        run: npm run build:mac -- --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # NOT: macOS Intel (x64) job'u kaldırıldı — macos-13 runner'ı artık kullanılamıyor
+  # (kuyrukta 30+ dk kalıyor). Intel paketi gerekirse Intel bir Mac'te 'npm run
+  # build:mac' çalıştırılarak (o makinede native zincir tamam) üretilir.
 
   windows:
     name: Windows x64
