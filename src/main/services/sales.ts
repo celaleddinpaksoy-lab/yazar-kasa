@@ -49,7 +49,15 @@ export function completeSale(input: CompleteSaleInput): SaleReceipt {
   const db = getDb()
 
   if (!input.items.length) throw new Error('Sepet boş')
-  if (!input.paymentMethod) throw new Error('Ödeme yöntemi seçilmedi')
+  if (!input.payments?.length) throw new Error('Ödeme girilmedi')
+
+  // Ödeme dağılımı doğrula: her kalem > 0, toplamı hesapla
+  const payments = input.payments.map((p) => {
+    const amount = Math.max(0, Math.round(p.amount))
+    if (amount <= 0) throw new Error('Ödeme tutarı sıfırdan büyük olmalı')
+    return { method: p.method, amount }
+  })
+  const paidTotal = payments.reduce((s, p) => s + p.amount, 0)
 
   let subtotal = 0
   const lines = input.items.map((it) => {
@@ -65,7 +73,7 @@ export function completeSale(input: CompleteSaleInput): SaleReceipt {
 
   const totalDiscount = Math.min(subtotal, Math.max(0, Math.round(input.totalDiscount ?? 0)))
   const total = subtotal - totalDiscount
-  const amountPaid = Math.min(total, Math.max(0, Math.round(input.amountPaid ?? 0)))
+  const amountPaid = Math.min(total, paidTotal)
   const debtAmount = total - amountPaid
 
   if (debtAmount > 0 && input.customerId == null) {
@@ -118,10 +126,15 @@ export function completeSale(input: CompleteSaleInput): SaleReceipt {
       insertItem.run(saleId, line.productId, line.quantity, line.unitPrice, line.lineDiscount, line.lineTotal)
     }
 
-    db.prepare(
+    // Çoklu ödeme: her yöntem ayrı sale_payments satırı (kasa/shift/rapor bu
+    // tabloyu okur → entegrasyon otomatik senkron kalır).
+    const insertPayment = db.prepare(
       `INSERT INTO sale_payments (sale_id, customer_id, date, amount, payment_method, kind, created_by, created_at)
        VALUES (?, ?, ?, ?, ?, 'sale', ?, ?)`
-    ).run(saleId, input.customerId ?? null, today(), amountPaid, input.paymentMethod, input.createdBy, now)
+    )
+    for (const p of payments) {
+      insertPayment.run(saleId, input.customerId ?? null, today(), p.amount, p.method, input.createdBy, now)
+    }
 
     if (debtAmount > 0 && input.customerId != null) {
       const balanceBefore = db
@@ -138,7 +151,7 @@ export function completeSale(input: CompleteSaleInput): SaleReceipt {
         today(),
         debtAmount,
         balanceAfter,
-        input.paymentMethod,
+        payments[0].method,
         `Veresiye satış (${receiptNo})`,
         input.createdBy,
         now
@@ -189,11 +202,11 @@ function buildReceipt(saleId: number): SaleReceipt {
     line_total: number
   }>
 
-  const payment = db
+  const payments = db
     .prepare(
-      `SELECT amount, payment_method FROM sale_payments WHERE sale_id = ? AND kind = 'sale'`
+      `SELECT amount, payment_method FROM sale_payments WHERE sale_id = ? AND kind = 'sale' ORDER BY id`
     )
-    .get(saleId) as { amount: number; payment_method: PaymentMethod } | undefined
+    .all(saleId) as Array<{ amount: number; payment_method: PaymentMethod }>
 
   const items: SaleReceiptItem[] = itemRows.map((r) => ({
     productId: r.product_id,
@@ -215,7 +228,7 @@ function buildReceipt(saleId: number): SaleReceipt {
     paidAmount: sale.paid_amount,
     debtAmount: sale.debt_amount,
     isCredit: sale.is_credit === 1,
-    paymentMethod: payment?.payment_method ?? 'cash',
+    payments: payments.map((p) => ({ method: p.payment_method, amount: p.amount })),
     items
   }
 }

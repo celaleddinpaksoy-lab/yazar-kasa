@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Category, CartLine, Customer, Hold, PaymentMethod, Product, SaleReceipt } from '@shared/types'
+import type {
+  Category,
+  CartLine,
+  CustomerWithBalance,
+  Hold,
+  PaymentMethod,
+  Product,
+  SaleReceipt
+} from '@shared/types'
 import Modal from '../components/Modal'
 import { useDataVersion } from '../context/DataContext'
 import {
@@ -22,15 +30,20 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
   const dataVer = useDataVersion()
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customers, setCustomers] = useState<CustomerWithBalance[]>([])
   const [selectedCat, setSelectedCat] = useState<number | 'all'>('all')
   const [gridSearch, setGridSearch] = useState('')
   const [barcode, setBarcode] = useState('')
   const [cart, setCart] = useState<CartEntry[]>([])
   const [customerId, setCustomerId] = useState('')
   const [customerBalance, setCustomerBalance] = useState<number | null>(null)
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash')
-  const [amountPaid, setAmountPaid] = useState('')
+  const [showCustPicker, setShowCustPicker] = useState(false)
+  // Çoklu ödeme: yöntem başına miktar (kuruş). Boş string = TL girişi bekleniyor.
+  const [payAmounts, setPayAmounts] = useState<Record<PaymentMethod, string>>({
+    cash: '',
+    card: '',
+    transfer: ''
+  })
   const [totalDiscount, setTotalDiscount] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -47,7 +60,7 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
     const [productList, catList, custList, holdList] = await Promise.all([
       window.api.productsList({ activeOnly: true }),
       window.api.categoriesList(),
-      window.api.customersList(),
+      window.api.customersWithBalance(),
       window.api.holdsList()
     ])
     setProducts(productList)
@@ -80,7 +93,16 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
     () => Math.max(0, subtotal - Math.min(subtotal, discountTotal)),
     [subtotal, discountTotal]
   )
-  const paid = useMemo(() => tlToKurus(amountPaid || kurusToTl(finalTotal)), [amountPaid, finalTotal])
+  // Çoklu ödeme toplamı (TL girişlerini kuruşa çevirir).
+  const payments = useMemo(() => {
+    const list: Array<{ method: PaymentMethod; amount: number }> = []
+    for (const [method, tl] of Object.entries(payAmounts) as Array<[PaymentMethod, string]>) {
+      const kurus = tlToKurus(tl)
+      if (kurus > 0) list.push({ method, amount: kurus })
+    }
+    return list
+  }, [payAmounts])
+  const paid = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments])
   const openDebt = Math.max(0, finalTotal - paid)
 
   const filteredProducts = useMemo(() => {
@@ -233,11 +255,11 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
     void window.api
       .customersCreate({ name: newCustName, phone: newCustPhone })
       .then((c) => {
-        setCustomers((prev) => [...prev.filter((x) => x.id !== c.id), c].sort((a, b) => a.name.localeCompare(b.name, 'tr')))
         setCustomerId(String(c.id))
         setNewCust(false)
         setNewCustName('')
         setNewCustPhone('')
+        return load()
       })
       .catch((e) => setError(String(e)))
   }
@@ -253,7 +275,6 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
     }
     setBusy(true)
     setError(null)
-    const effectivePaid = Math.min(finalTotal, paid)
     void window.api
       .salesComplete({
         items: cart.map((l) => ({
@@ -263,8 +284,7 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
           discount: l.discount
         })),
         customerId: customerId ? Number(customerId) : null,
-        paymentMethod,
-        amountPaid: effectivePaid,
+        payments,
         totalDiscount: discountTotal
       })
       .then((res) => {
@@ -275,7 +295,7 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
         setReceipt(res.receipt ?? null)
         setCart([])
         setBarcode('')
-        setAmountPaid('')
+        setPayAmounts({ cash: '', card: '', transfer: '' })
         setTotalDiscount('')
         setCustomerId('')
         if (heldId != null) {
@@ -466,20 +486,34 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
           <label className="form-field">
             Müşteri
             <div className="cust-row">
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-              >
-                <option value="">🧍 Anonim müşteri</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <button className="btn small" onClick={() => setNewCust(true)}>
-                + Müşteri
+              {selectedCustomer ? (
+                <button
+                  className="cust-chip"
+                  onClick={() => setShowCustPicker(true)}
+                  title="Değiştirmek için tıklayın"
+                >
+                  <span className="cust-chip-name">{selectedCustomer.name}</span>
+                  <span className={`cust-chip-bal ${selectedCustomer.balance > 0 ? 'debt' : 'ok'}`}>
+                    {formatKurus(selectedCustomer.balance)}
+                  </span>
+                </button>
+              ) : (
+                <button className="cust-chip anon" onClick={() => setShowCustPicker(true)}>
+                  🧍 Anonim Müşteri
+                </button>
+              )}
+              <button className="btn small" onClick={() => setShowCustPicker(true)}>
+                Müşteri Seç
               </button>
+              {customerId && (
+                <button
+                  className="btn small"
+                  onClick={() => setCustomerId('')}
+                  title="Anonime dön"
+                >
+                  ✕
+                </button>
+              )}
             </div>
             {customerBalance != null && (
               <span className={`bal ${customerBalance > 0 ? 'debt' : 'ok'}`}>
@@ -488,38 +522,40 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
             )}
           </label>
 
-          <div className="pay-methods">
-            {(['cash', 'card', 'transfer'] as PaymentMethod[]).map((m) => (
-              <button
-                key={m}
-                className={`pay-btn ${paymentMethod === m ? 'active' : ''}`}
-                onClick={() => setPaymentMethod(m)}
-              >
-                {paymentMethodLabel(m)}
-              </button>
-            ))}
+          <div className="form-field">
+            <span className="field-label">Ödeme ({formatKurus(paid)})</span>
+            <div className="multi-pay">
+              {(['cash', 'card', 'transfer'] as PaymentMethod[]).map((m) => (
+                <div key={m} className="pay-row">
+                  <span className="pay-row-label">{paymentMethodLabel(m)}</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={payAmounts[m]}
+                    placeholder={m === 'cash' ? kurusToTl(finalTotal) : '0,00'}
+                    onChange={(e) => setPayAmounts((prev) => ({ ...prev, [m]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="pay-summary">
+              {openDebt > 0 ? (
+                <span className="debt-note">
+                  Kalan <strong>{formatKurus(openDebt)}</strong>
+                  {selectedCustomer ? (
+                    <>
+                      {' '}
+                      <em>{selectedCustomer.name}</em> borcuna işlenecek.
+                    </>
+                  ) : (
+                    ' — ödeme eksik! Borç için müşteri seçmelisiniz.'
+                  )}
+                </span>
+              ) : (
+                <span className="pay-ok">Ödeme tamam {formatKurus(paid)}</span>
+              )}
+            </div>
           </div>
-
-          <label className="form-field">
-            Alınan
-            <input
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              placeholder={kurusToTl(finalTotal)}
-            />
-          </label>
-
-          {openDebt > 0 && selectedCustomer && (
-            <div className="debt-note">
-              Kalan <strong>{formatKurus(openDebt)}</strong>{' '}
-              <em>{selectedCustomer.name}</em> borcuna işlenecek.
-            </div>
-          )}
-          {openDebt > 0 && !selectedCustomer && (
-            <div className="debt-note warn">
-              Ödeme eksik! Borç ile satış için müşteri seçmeniz gerekir.
-            </div>
-          )}
 
           {error && <p className="error">{error}</p>}
 
@@ -532,6 +568,22 @@ export default function SalePage({ userId }: { userId: number }): React.JSX.Elem
           </button>
         </div>
       </div>
+
+      {showCustPicker && (
+        <CustomerPickerModal
+          customers={customers}
+          selectedId={customerId ? Number(customerId) : null}
+          onPick={(id) => {
+            setCustomerId(String(id))
+            setShowCustPicker(false)
+          }}
+          onNewCust={() => {
+            setShowCustPicker(false)
+            setNewCust(true)
+          }}
+          onClose={() => setShowCustPicker(false)}
+        />
+      )}
 
       {newCust && (
         <Modal title="Yeni Müşteri" onClose={() => setNewCust(false)}>
@@ -621,10 +673,12 @@ function ReceiptModal({
             <span>TOPLAM</span>
             <span>{formatKurus(receipt.total)}</span>
           </div>
-          <div className="r-line">
-            <span>Ödenen ({paymentMethodLabel(receipt.paymentMethod)})</span>
-            <span>{formatKurus(receipt.paidAmount)}</span>
-          </div>
+          {receipt.payments.map((p) => (
+            <div className="r-line" key={p.method}>
+              <span>{paymentMethodLabel(p.method)}</span>
+              <span>{formatKurus(p.amount)}</span>
+            </div>
+          ))}
           {receipt.debtAmount > 0 && (
             <div className="r-line debt">
               <span>Kalan Borç</span>
@@ -640,6 +694,89 @@ function ReceiptModal({
         <button className="btn primary" onClick={onClose}>
           Yeni Satış
         </button>
+      </div>
+    </Modal>
+  )
+}
+
+function CustomerPickerModal({
+  customers,
+  selectedId,
+  onPick,
+  onNewCust,
+  onClose
+}: {
+  customers: CustomerWithBalance[]
+  selectedId: number | null
+  onPick: (id: number) => void
+  onNewCust: () => void
+  onClose: () => void
+}): React.JSX.Element {
+  const [q, setQ] = useState('')
+  const [active, setActive] = useState(0)
+
+  const list = useMemo(() => {
+    const s = q.trim().toLocaleLowerCase('tr')
+    const base = s
+      ? customers.filter(
+          (c) =>
+            c.name.toLocaleLowerCase('tr').includes(s) ||
+            (c.phone ?? '').toLocaleLowerCase('tr').includes(s)
+        )
+      : customers
+    return [...base].sort((a, b) => a.name.localeCompare(b.name, 'tr'))
+  }, [customers, q])
+
+  useEffect(() => setActive(0), [q])
+
+  return (
+    <Modal title="Müşteri Seç" onClose={onClose}>
+      <div className="cust-picker">
+        <input
+          className="input cust-picker-search"
+          placeholder="İsim veya telefon ara…"
+          value={q}
+          autoFocus
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              setActive((a) => Math.min(list.length - 1, a + 1))
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              setActive((a) => Math.max(0, a - 1))
+            } else if (e.key === 'Enter' && list[active]) {
+              onPick(list[active].id)
+            } else if (e.key === 'Escape') {
+              onClose()
+            }
+          }}
+        />
+        <div className="cust-picker-list">
+          {list.length === 0 && <p className="muted cust-empty">Müşteri bulunamadı.</p>}
+          {list.map((c, i) => (
+            <button
+              key={c.id}
+              className={`cust-item ${i === active ? 'active' : ''} ${selectedId === c.id ? 'picked' : ''}`}
+              onMouseEnter={() => setActive(i)}
+              onClick={() => onPick(c.id)}
+            >
+              <span className="cust-item-name">{c.name}</span>
+              {c.phone && <span className="cust-item-phone">{c.phone}</span>}
+              <span className={`cust-item-bal ${c.balance > 0 ? 'debt' : 'ok'}`}>
+                {formatKurus(c.balance)}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="cust-picker-foot">
+          <span className="muted">
+            {selectedId ? 'Seçili müşteriyi değiştir' : 'Anonim satış için boş bırak'}
+          </span>
+          <button className="btn primary" onClick={onNewCust}>
+            + Yeni Müşteri
+          </button>
+        </div>
       </div>
     </Modal>
   )

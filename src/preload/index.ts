@@ -53,6 +53,14 @@ const api: AppApi = {
   customersMovementRemove: (movementId: number) =>
     ipcRenderer.invoke('customers:movementRemove', movementId),
   salesComplete: (input: CompleteSalePayload) => ipcRenderer.invoke('sales:complete', input),
+  salesHistory: (query?: { search?: string; from?: number; to?: number }) =>
+    ipcRenderer.invoke('sales:history', query ?? {}),
+  salesHistoryDetail: (id: number) => ipcRenderer.invoke('sales:historyDetail', id),
+  salesHistoryUpdateDate: (id: number, createdAt: number) =>
+    ipcRenderer.invoke('sales:historyUpdateDate', id, createdAt),
+  salesHistoryUpdateCustomer: (id: number, customerId: number | null) =>
+    ipcRenderer.invoke('sales:historyUpdateCustomer', id, customerId),
+  salesHistoryDelete: (id: number) => ipcRenderer.invoke('sales:historyDelete', id),
   holdsList: () => ipcRenderer.invoke('holds:list'),
   holdsCreate: (input: { customerName?: string; itemsJson: string; total: number }) =>
     ipcRenderer.invoke('holds:create', input),

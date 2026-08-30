@@ -20,8 +20,7 @@ describe('iade + değişim ortak limit', () => {
     const r = completeSale({
       items: [{ productId: pId, quantity: qty, unitPrice: 10000, discount: 0 }],
       customerId: null,
-      paymentMethod: 'cash',
-      amountPaid: 10000 * qty,
+      payments: [{ method: 'cash', amount: 10000 * qty }],
       totalDiscount: 0,
       createdBy: 1
     })

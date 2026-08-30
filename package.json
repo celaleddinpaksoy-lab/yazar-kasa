@@ -1,6 +1,6 @@
 {
   "name": "yazar-kasa",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Yazar kasa (POS) + stok + borç/taksit + alacak-verecek defteri uygulaması",
   "main": "./out/main/index.js",
   "author": "shadowcreed",

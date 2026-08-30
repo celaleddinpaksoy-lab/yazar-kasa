@@ -17,8 +17,7 @@ describe('satış + stok', () => {
     const r = completeSale({
       items: [{ productId: p.id, quantity: 3, unitPrice: 10000, discount: 0 }],
       customerId: null,
-      paymentMethod: 'cash',
-      amountPaid: 30000,
+      payments: [{ method: 'cash', amount: 30000 }],
       totalDiscount: 0,
       createdBy: 1
     })
@@ -37,8 +36,7 @@ describe('satış + stok', () => {
       completeSale({
         items: [{ productId: p.id, quantity: 5, unitPrice: 10000, discount: 0 }],
         customerId: null,
-        paymentMethod: 'cash',
-        amountPaid: 50000,
+        payments: [{ method: 'cash', amount: 50000 }],
         totalDiscount: 0,
         createdBy: 1
       })
@@ -55,8 +53,7 @@ describe('satış + stok', () => {
       completeSale({
         items: [{ productId: p.id, quantity: 1, unitPrice: 10000, discount: 0 }],
         customerId: null,
-        paymentMethod: 'cash',
-        amountPaid: 5000,
+        payments: [{ method: 'cash', amount: 5000 }],
         totalDiscount: 0,
         createdBy: 1
       })

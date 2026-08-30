@@ -7,6 +7,7 @@ import CashShiftPage from '../pages/CashShiftPage'
 import CustomersPage from '../pages/CustomersPage'
 import ReturnsPage from '../pages/ReturnsPage'
 import ExchangesPage from '../pages/ExchangesPage'
+import SalesHistoryPage from '../pages/SalesHistoryPage'
 import SuppliersPage from '../pages/SuppliersPage'
 import PurchasesPage from '../pages/PurchasesPage'
 import SettingsPage from '../pages/SettingsPage'
@@ -36,6 +37,7 @@ const NAV: NavItem[] = [
   { key: 'customers', label: 'Müşteriler & Borç', ready: true },
   { key: 'returns', label: 'İade', ready: true },
   { key: 'exchanges', label: 'Değişim', ready: true },
+  { key: 'sales-history', label: 'Satış Geçmişi', ready: true },
   { key: 'suppliers', label: 'Tedarikçiler', ready: true },
   { key: 'purchases', label: 'Alış Defteri / Stok', ready: true },
   { key: 'debts', label: 'Borç Defteri', ready: true },
@@ -43,7 +45,7 @@ const NAV: NavItem[] = [
   { key: 'settings', label: 'Ayarlar', ready: true }
 ]
 
-const PERSONNEL_KEYS = ['sale', 'cash', 'customers', 'returns', 'exchanges', 'settings']
+const PERSONNEL_KEYS = ['sale', 'cash', 'customers', 'returns', 'exchanges', 'sales-history', 'settings']
 
 function visibleNav(role: User['role']): NavItem[] {
   return role === 'admin' ? NAV : NAV.filter((n) => PERSONNEL_KEYS.includes(n.key))
@@ -127,6 +129,7 @@ export default function AppShell({ user, onLogout }: Props): React.JSX.Element {
           {page === 'customers' && <CustomersPage role={user.role} />}
           {page === 'returns' && <ReturnsPage role={user.role} />}
           {page === 'exchanges' && <ExchangesPage />}
+          {page === 'sales-history' && <SalesHistoryPage role={user.role} />}
           {page === 'products' && <ProductsPage />}
           {page === 'categories' && <CategoriesPage />}
           {page === 'suppliers' && <SuppliersPage role={user.role} />}

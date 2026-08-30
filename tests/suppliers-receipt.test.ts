@@ -57,8 +57,7 @@ describe('fiş arama (findSaleForReturnByReceipt)', () => {
     const r = completeSale({
       items: [{ productId: p.id, quantity: 2, unitPrice: 10000, discount: 0 }],
       customerId: null,
-      paymentMethod: 'cash',
-      amountPaid: 20000,
+      payments: [{ method: 'cash', amount: 20000 }],
       totalDiscount: 0,
       createdBy: 1
     })

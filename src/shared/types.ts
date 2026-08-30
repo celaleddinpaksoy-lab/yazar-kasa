@@ -135,11 +135,16 @@ export interface SaleLineInput {
   discount: number
 }
 
+export interface SalePaymentInput {
+  method: PaymentMethod
+  amount: number
+}
+
 export interface CompleteSaleInput {
   items: SaleLineInput[]
   customerId: number | null
-  paymentMethod: PaymentMethod
-  amountPaid: number
+  /** Bir satış birden fazla yöntemle ödenebilir (örn. 50 kart + 30 nakit + 20 havale). */
+  payments: SalePaymentInput[]
   totalDiscount: number
   note?: string
   createdBy: number
@@ -165,7 +170,8 @@ export interface SaleReceipt {
   paidAmount: number
   debtAmount: number
   isCredit: boolean
-  paymentMethod: PaymentMethod
+  /** Fişteki ödeme dağılımı (birden çok yöntem olabilir). */
+  payments: SalePaymentInput[]
   items: SaleReceiptItem[]
 }
 
@@ -219,6 +225,57 @@ export interface SaleSummary {
 export interface SaleForReturn {
   sale: SaleSummary
   items: ReturnableItem[]
+}
+
+/** Satış Geçmişi — liste satırı */
+export interface SalesHistoryItem {
+  id: number
+  receiptNo: string
+  createdAt: number
+  customerId: number | null
+  customerName: string | null
+  total: number
+  paidAmount: number
+  debtAmount: number
+  status: string
+  createdByName: string | null
+  returnsCount: number
+  exchangesCount: number
+}
+
+export interface SaleHistoryItemRow {
+  productId: number
+  name: string
+  barcode: string | null
+  quantity: number
+  unitPrice: number
+  discount: number
+  lineTotal: number
+}
+
+export interface SaleHistoryPaymentRow {
+  method: PaymentMethod
+  amount: number
+}
+
+/** Satış Geçmişi — detay (kalemler + ödemeler) */
+export interface SaleHistoryDetail {
+  id: number
+  receiptNo: string
+  createdAt: number
+  subtotal: number
+  discountTotal: number
+  total: number
+  paidAmount: number
+  debtAmount: number
+  isCredit: boolean
+  status: string
+  note: string | null
+  customerId: number | null
+  customerName: string | null
+  createdByName: string | null
+  items: SaleHistoryItemRow[]
+  payments: SaleHistoryPaymentRow[]
 }
 
 export interface ReturnLineInput {
@@ -581,6 +638,11 @@ export interface AppApi {
   ) => Promise<CustomerDetail>
   customersMovementRemove: (movementId: number) => Promise<CustomerDetail>
   salesComplete: (input: CompleteSalePayload) => Promise<SaleResult>
+  salesHistory: (query?: { search?: string; from?: number; to?: number }) => Promise<SalesHistoryItem[]>
+  salesHistoryDetail: (id: number) => Promise<SaleHistoryDetail>
+  salesHistoryUpdateDate: (id: number, createdAt: number) => Promise<SaleHistoryDetail>
+  salesHistoryUpdateCustomer: (id: number, customerId: number | null) => Promise<SaleHistoryDetail>
+  salesHistoryDelete: (id: number) => Promise<{ ok: boolean; error?: string; message?: string }>
   holdsList: () => Promise<Hold[]>
   holdsCreate: (input: { customerName?: string; itemsJson: string; total: number }) => Promise<Hold>
   holdsRemove: (id: number) => Promise<void>

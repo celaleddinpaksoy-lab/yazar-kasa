@@ -35,6 +35,13 @@ import {
 } from './repositories/customers'
 import { completeSale } from './services/sales'
 import {
+  listSalesHistory,
+  getSaleHistoryDetail,
+  updateSaleDate,
+  updateSaleCustomer,
+  deleteSale
+} from './services/salesHistory'
+import {
   listActiveHolds,
   createHold,
   removeHold,
@@ -231,6 +238,27 @@ export function registerIpcHandlers(): void {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  ipcMain.handle('sales:history', (_e, query) => listSalesHistory(query))
+  ipcMain.handle('sales:historyDetail', (_e, id: number) => getSaleHistoryDetail(id))
+  ipcMain.handle('sales:historyUpdateDate', (_e, id: number, createdAt: number) => {
+    requireAdmin()
+    const detail = updateSaleDate(id, createdAt)
+    broadcastDataChanged()
+    return detail
+  })
+  ipcMain.handle('sales:historyUpdateCustomer', (_e, id: number, customerId: number | null) => {
+    requireAdmin()
+    const detail = updateSaleCustomer(id, customerId)
+    broadcastDataChanged()
+    return detail
+  })
+  ipcMain.handle('sales:historyDelete', (_e, id: number) => {
+    requireAdmin()
+    const res = deleteSale(id)
+    broadcastDataChanged()
+    return res
   })
 
   ipcMain.handle('holds:list', () => listActiveHolds())

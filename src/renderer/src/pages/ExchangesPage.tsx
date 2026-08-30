@@ -4,7 +4,9 @@ import type {
   ExchangeDirection,
   ExchangeSettlement,
   ExchangeSummary,
-  Product
+  Product,
+  SaleForReturn,
+  SaleSummary
 } from '@shared/types'
 import {
   formatKurus,
@@ -52,16 +54,19 @@ export default function ExchangesPage(): React.JSX.Element {
   const [settlement, setSettlement] = useState<ExchangeSettlement>('none')
   const [note, setNote] = useState('')
   const [history, setHistory] = useState<ExchangeSummary[]>([])
+  const [sales, setSales] = useState<SaleSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const load = async (): Promise<void> => {
-    const [custList, exList] = await Promise.all([
+    const [custList, exList, saleList] = await Promise.all([
       window.api.customersWithBalance(),
-      window.api.exchangesList()
+      window.api.exchangesList(),
+      window.api.returnsSales()
     ])
     setCustomers(custList)
     setHistory(exList)
+    setSales(saleList)
   }
 
   useEffect(() => {
@@ -120,6 +125,31 @@ export default function ExchangesPage(): React.JSX.Element {
   const effectiveSettlement: ExchangeSettlement =
     difference === 0 ? 'none' : settlement
 
+  function applyReceipt(sr: SaleForReturn): void {
+    setOriginalSaleId(sr.sale.id)
+    const limits: Record<number, number> = {}
+    for (const it of sr.items) {
+      if (it.remainingQty > 0) limits[it.productId] = it.remainingQty
+    }
+    setInLimits(limits)
+    setInLines(
+      sr.items
+        .filter((i) => i.remainingQty > 0)
+        .map((i) => ({
+          productId: i.productId,
+          name: i.name,
+          barcode: i.barcode,
+          qty: 0,
+          unitPrice: i.unitPrice,
+          direction: 'in' as const
+        }))
+    )
+    if (sr.sale.customerName) {
+      const c = customers.find((x) => x.name === sr.sale.customerName)
+      if (c) setCustomerId(String(c.id))
+    }
+  }
+
   function searchByReceipt(): void {
     setError(null)
     if (!receiptInput.trim()) return
@@ -131,28 +161,24 @@ export default function ExchangesPage(): React.JSX.Element {
           setError('Fiş bulunamadı')
           return
         }
-        setOriginalSaleId(sr.sale.id)
-        const limits: Record<number, number> = {}
-        for (const it of sr.items) {
-          if (it.remainingQty > 0) limits[it.productId] = it.remainingQty
+        applyReceipt(sr)
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setReceiptBusy(false))
+  }
+
+  function loadBySale(sale: SaleSummary): void {
+    setReceiptInput(sale.receiptNo)
+    setError(null)
+    setReceiptBusy(true)
+    void window.api
+      .salesFindByReceipt(sale.receiptNo)
+      .then((sr) => {
+        if (!sr) {
+          setError('Fiş bulunamadı')
+          return
         }
-        setInLimits(limits)
-        setInLines(
-          sr.items
-            .filter((i) => i.remainingQty > 0)
-            .map((i) => ({
-              productId: i.productId,
-              name: i.name,
-              barcode: i.barcode,
-              qty: 0,
-              unitPrice: i.unitPrice,
-              direction: 'in' as const
-            }))
-        )
-        if (sr.sale.customerName) {
-          const c = customers.find((x) => x.name === sr.sale.customerName)
-          if (c) setCustomerId(String(c.id))
-        }
+        applyReceipt(sr)
       })
       .catch((e) => setError(String(e)))
       .finally(() => setReceiptBusy(false))
@@ -256,6 +282,29 @@ export default function ExchangesPage(): React.JSX.Element {
             </button>
           )}
         </div>
+        {sales.length > 0 && (
+          <div className="sale-list">
+            <span className="muted" style={{ fontSize: '0.75rem' }}>
+              Son fişler — tıklayınca ürünler gelen satıra yüklenir:
+            </span>
+            <div className="sale-list-items">
+              {sales.slice(0, 8).map((s) => (
+                <button
+                  key={s.id}
+                  className={`sale-chip ${originalSaleId === s.id ? 'active' : ''}`}
+                  onClick={() => loadBySale(s)}
+                  disabled={receiptBusy}
+                >
+                  {s.receiptNo}
+                  <span className="muted">
+                    {formatDateTime(s.createdAt)} · {s.customerName ?? 'Anonim'} ·{' '}
+                    {formatKurus(s.total)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {originalSaleId != null && (
           <p className="muted" style={{ marginTop: '0.5rem' }}>
             İade edilecek (gelen) kalemler bu fişin kalan miktarıyla sınırlanır. Bağlama zorunlu değil —
