@@ -11,11 +11,13 @@ asarUnpack:
 npmRebuild: true
 
 # Otomatik güncelleme: GitHub Releases.
-# owner/repo belirtilmediği için electron-builder, git origin remote'undan çeker
-# (GitHub Actions'ta checkout otomatik ayarlar). Repo public olmalı ki
-# kurulu uygulamalar yeni sürümü token'sız indirebilsin.
+# owner/repo AÇIKÇA belirtilir — böylece "git origin'den çek" belirsizliği
+# ortadan kalkar ve kurulu uygulamalar güncellemeyi her ortamda doğru repo'dan
+# kontrol eder. Repo public: kurulu uygulamalar new sürümü token'sız indirir.
 publish:
   provider: github
+  owner: celaleddinpaksoy-lab
+  repo: yazar-kasa
 
 win:
   target:
