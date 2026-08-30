@@ -226,6 +226,7 @@ CREATE TABLE IF NOT EXISTS return_payments (
 CREATE TABLE IF NOT EXISTS exchanges (
   id                   INTEGER PRIMARY KEY AUTOINCREMENT,
   exchange_no          TEXT NOT NULL UNIQUE,
+  original_sale_id     INTEGER REFERENCES sales(id),
   customer_id          INTEGER REFERENCES customers(id),
   total_in             INTEGER NOT NULL DEFAULT 0,
   total_out            INTEGER NOT NULL DEFAULT 0,
@@ -236,6 +237,7 @@ CREATE TABLE IF NOT EXISTS exchanges (
   created_by           INTEGER REFERENCES users(id),
   created_at           INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_exchanges_original_sale ON exchanges(original_sale_id);
 
 CREATE TABLE IF NOT EXISTS exchange_items (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,

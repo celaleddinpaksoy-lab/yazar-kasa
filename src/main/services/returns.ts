@@ -72,6 +72,25 @@ interface SaleItemRow {
   line_total: number
 }
 
+/**
+ * Fiş (seri) numarasından satışı bulur. Önce tam eşleşme (UNIQUE indeks),
+ * bulunamazsa kısmi eşleşme (kullanıcı fişi eksik yazabilir). Bulamazsa null.
+ */
+export function findSaleForReturnByReceipt(receiptNo: string): SaleForReturn | null {
+  const db = getDb()
+  const q = String(receiptNo ?? '').trim()
+  if (!q) return null
+  const exact = db
+    .prepare('SELECT id FROM sales WHERE receipt_no = ?')
+    .get(q) as { id: number } | undefined
+  if (exact) return getSaleReturnable(exact.id)
+  const like = db
+    .prepare('SELECT id FROM sales WHERE receipt_no LIKE ? ORDER BY created_at DESC LIMIT 1')
+    .get(`%${q}%`) as { id: number } | undefined
+  if (like) return getSaleReturnable(like.id)
+  return null
+}
+
 /** İade edilebilecek ürünler (kalan miktarlarla). */
 export function getSaleReturnable(saleId: number): SaleForReturn {
   const db = getDb()
@@ -89,20 +108,24 @@ export function getSaleReturnable(saleId: number): SaleForReturn {
       `SELECT si.product_id, p.name, p.barcode, si.quantity, si.unit_price, si.discount, si.line_total,
               COALESCE((SELECT SUM(ri.quantity) FROM return_items ri
                         JOIN returns r ON r.id = ri.return_id
-                        WHERE r.original_sale_id = si.sale_id AND ri.product_id = si.product_id), 0) AS returned_qty
+                        WHERE r.original_sale_id = si.sale_id AND ri.product_id = si.product_id), 0) AS returned_qty,
+              COALESCE((SELECT SUM(ei.quantity) FROM exchange_items ei
+                        JOIN exchanges e ON e.id = ei.exchange_id
+                        WHERE e.original_sale_id = si.sale_id AND ei.product_id = si.product_id
+                          AND ei.direction = 'in'), 0) AS exchanged_qty
        FROM sale_items si
        LEFT JOIN products p ON p.id = si.product_id
        WHERE si.sale_id = ?`
     )
-    .all(saleId) as Array<SaleItemRow & { returned_qty: number }>
+    .all(saleId) as Array<SaleItemRow & { returned_qty: number; exchanged_qty: number }>
 
   const returnable: ReturnableItem[] = items.map((it) => ({
     productId: it.product_id,
     name: it.name ?? 'Silinmiş ürün',
     barcode: it.barcode,
     quantity: it.quantity,
-    returnedQty: it.returned_qty,
-    remainingQty: Math.max(0, it.quantity - it.returned_qty),
+    returnedQty: it.returned_qty + it.exchanged_qty,
+    remainingQty: Math.max(0, it.quantity - it.returned_qty - it.exchanged_qty),
     unitPrice: it.unit_price,
     lineTotal: it.line_total
   }))

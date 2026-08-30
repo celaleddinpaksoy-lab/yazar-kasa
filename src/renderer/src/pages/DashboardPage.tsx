@@ -58,7 +58,6 @@ export default function DashboardPage(): React.JSX.Element {
             <span>İade: {formatKurus(data.today.returnTotal)}</span>
             <span>Değişim farkı: {formatKurus(data.today.exchangeNet)}</span>
             <span>Nakit giriş: {formatKurus(data.today.moneyIn)}</span>
-            <span>Kasadan çıkış: {formatKurus(data.today.cashExpense)}</span>
           </div>
         </div>
         <div className="bars">

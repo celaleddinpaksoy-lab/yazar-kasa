@@ -102,6 +102,20 @@ const MIGRATIONS: Array<(database: Database.Database) => void> = [
         database.exec(create[name])
       }
     }
+  },
+  // v5: değişim kaynağını fişe bağlar — iade/değişim çift kullanımı engeli
+  (database) => {
+    const row = database
+      .prepare(
+        "SELECT COUNT(*) AS c FROM pragma_table_info('exchanges') WHERE name = 'original_sale_id'"
+      )
+      .get() as { c: number }
+    if (row.c === 0) {
+      database.exec('ALTER TABLE exchanges ADD COLUMN original_sale_id INTEGER REFERENCES sales(id);')
+    }
+    database.exec(
+      'CREATE INDEX IF NOT EXISTS idx_exchanges_original_sale ON exchanges(original_sale_id);'
+    )
   }
 ]
 

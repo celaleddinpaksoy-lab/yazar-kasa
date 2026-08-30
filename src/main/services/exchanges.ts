@@ -1,6 +1,7 @@
 import { getDb } from '../database'
 import { adjustStock } from './stock'
 import { recomputeBalances } from '../repositories/customers'
+import { getSaleReturnable } from './returns'
 import type {
   CompleteExchangeInput,
   ExchangeDirection,
@@ -61,6 +62,20 @@ export function completeExchange(input: CompleteExchangeInput): {
   if (inLines.length === 0) throw new Error('En az bir gelen ürün seçin (iade edilen)')
   if (outLines.length === 0) throw new Error('En az bir giden ürün seçin (yeni verilen)')
 
+  // Fişe bağlı değişim: gelen kalemler satıştan kalan miktarı aşamaz
+  // (iade + değişim ortak limit — getSaleReturnable tek kaynak).
+  if (input.originalSaleId != null) {
+    const src = getSaleReturnable(input.originalSaleId)
+    for (const l of inLines) {
+      const item = src.items.find((it) => it.productId === l.productId)
+      if (item && l.qty > item.remainingQty) {
+        throw new Error(
+          `"${item.name}" için fişten en fazla ${item.remainingQty} adet iade edilebilir`
+        )
+      }
+    }
+  }
+
   const totalIn = inLines.reduce((s, l) => s + l.lineTotal, 0)
   const totalOut = outLines.reduce((s, l) => s + l.lineTotal, 0)
   const difference = totalOut - totalIn
@@ -85,11 +100,12 @@ export function completeExchange(input: CompleteExchangeInput): {
     const res = db
       .prepare(
         `INSERT INTO exchanges
-           (exchange_no, customer_id, total_in, total_out, difference, difference_settlement, note, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           (exchange_no, original_sale_id, customer_id, total_in, total_out, difference, difference_settlement, note, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         exchangeNo,
+        input.originalSaleId ?? null,
         input.customerId ?? null,
         totalIn,
         totalOut,
@@ -185,13 +201,18 @@ export function completeExchange(input: CompleteExchangeInput): {
 export function listExchanges(): ExchangeSummary[] {
   const rows = getDb()
     .prepare(
-      `SELECT * FROM exchanges ORDER BY created_at DESC LIMIT 100`
+      `SELECT e.*, s.receipt_no AS original_receipt_no
+       FROM exchanges e
+       LEFT JOIN sales s ON s.id = e.original_sale_id
+       ORDER BY e.created_at DESC LIMIT 100`
     )
     .all() as Array<{
     id: number
     exchange_no: string
     created_at: number
     customer_id: number | null
+    original_sale_id: number | null
+    original_receipt_no: string | null
     total_in: number
     total_out: number
     difference: number
@@ -203,6 +224,8 @@ export function listExchanges(): ExchangeSummary[] {
     exchangeNo: r.exchange_no,
     createdAt: r.created_at,
     customerName: customerName(r.customer_id),
+    originalSaleId: r.original_sale_id,
+    originalReceiptNo: r.original_receipt_no,
     totalIn: r.total_in,
     totalOut: r.total_out,
     difference: r.difference,

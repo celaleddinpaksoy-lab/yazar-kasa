@@ -44,6 +44,7 @@ import { getOpenShift, openShift, closeShift, listShifts } from './repositories/
 import {
   listSalesForReturn,
   getSaleReturnable,
+  findSaleForReturnByReceipt,
   completeReturn,
   listReturns
 } from './services/returns'
@@ -65,6 +66,7 @@ import {
   getSupplierDetail,
   addManualSupplierDebt,
   paySupplier,
+  listSupplierPayments,
   editManualSupplierMovement,
   removeManualSupplierMovement,
   listPurchases
@@ -265,6 +267,9 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('returns:sales', () => listSalesForReturn())
   ipcMain.handle('returns:saleReturnable', (_e, saleId: number) => getSaleReturnable(saleId))
+  ipcMain.handle('sales:findByReceipt', (_e, receiptNo: string) =>
+    findSaleForReturnByReceipt(receiptNo)
+  )
   ipcMain.handle('returns:complete', (_e, input: CompleteReturnInput) => {
     const user = session
     if (!user) return { ok: false, error: 'Oturum açık değil' }
@@ -322,6 +327,7 @@ export function registerIpcHandlers(): void {
     broadcastDataChanged()
     return d
   })
+  ipcMain.handle('suppliers:payments', () => listSupplierPayments())
   ipcMain.handle('suppliers:movementEdit', (_e, movementId: number, input: SupplierMovementInput) => {
     requireAdmin()
     const d = editManualSupplierMovement(movementId, input)

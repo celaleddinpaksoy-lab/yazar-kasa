@@ -270,6 +270,7 @@ export interface ExchangeLineInput {
 
 export interface CompleteExchangeInput {
   customerId: number | null
+  originalSaleId?: number | null
   items: ExchangeLineInput[]
   differenceSettlement: ExchangeSettlement
   note?: string
@@ -283,6 +284,8 @@ export interface ExchangeSummary {
   exchangeNo: string
   createdAt: number
   customerName: string | null
+  originalSaleId: number | null
+  originalReceiptNo: string | null
   totalIn: number
   totalOut: number
   difference: number
@@ -351,6 +354,19 @@ export interface SupplierMovementInput {
 
 export interface SupplierPayInput extends SupplierMovementInput {
   paymentMethod: PaymentMethod
+}
+
+export interface SupplierPayment {
+  id: number
+  supplierId: number
+  supplierName: string
+  date: string
+  amount: number
+  paymentMethod: PaymentMethod
+  note: string | null
+  isManual: number
+  createdByName: string | null
+  createdAt: number
 }
 
 export interface PurchaseLineInput {
@@ -456,7 +472,6 @@ export interface DashboardSummary {
     returnTotal: number
     exchangeNet: number
     moneyIn: number
-    cashExpense: number
   }
   lowStock: LowStockItem[]
   customerReceivableTotal: number
@@ -499,7 +514,6 @@ export interface PeriodReport {
   netRevenue: number
   profit: number
   moneyIn: number
-  cashExpense: number
   collectedDebt: number
   purchaseTotal: number
   purchaseCount: number
@@ -577,6 +591,7 @@ export interface AppApi {
   cashList: () => Promise<CashShiftSummary[]>
   returnsSales: () => Promise<SaleSummary[]>
   returnsSaleReturnable: (saleId: number) => Promise<SaleForReturn>
+  salesFindByReceipt: (receiptNo: string) => Promise<SaleForReturn | null>
   returnsComplete: (input: CompleteReturnPayload) => Promise<ReturnResult>
   returnsList: () => Promise<ReturnSummary[]>
   exchangesComplete: (input: CompleteExchangePayload) => Promise<ExchangeResult>
@@ -589,6 +604,7 @@ export interface AppApi {
   suppliersDetail: (id: number) => Promise<SupplierDetail>
   suppliersDebtAdd: (id: number, input: SupplierMovementInput) => Promise<SupplierDetail>
   suppliersPay: (id: number, input: SupplierPayInput) => Promise<SupplierDetail>
+  suppliersPayments: () => Promise<SupplierPayment[]>
   suppliersMovementEdit: (movementId: number, input: SupplierMovementInput) => Promise<SupplierDetail>
   suppliersMovementRemove: (movementId: number) => Promise<SupplierDetail>
   purchasesComplete: (input: CompletePurchasePayload) => Promise<PurchaseResult>

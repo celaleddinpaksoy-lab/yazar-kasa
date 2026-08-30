@@ -3,6 +3,7 @@ import type {
   CustomerWithBalance,
   ExchangeDirection,
   ExchangeSettlement,
+  ExchangeSummary,
   Product
 } from '@shared/types'
 import {
@@ -42,21 +43,15 @@ export default function ExchangesPage(): React.JSX.Element {
   const dataVer = useDataVersion()
   const [inLines, setInLines] = useState<ExLine[]>([])
   const [outLines, setOutLines] = useState<ExLine[]>([])
+  const [inLimits, setInLimits] = useState<Record<number, number>>({})
+  const [originalSaleId, setOriginalSaleId] = useState<number | null>(null)
+  const [receiptInput, setReceiptInput] = useState('')
+  const [receiptBusy, setReceiptBusy] = useState(false)
   const [customers, setCustomers] = useState<CustomerWithBalance[]>([])
   const [customerId, setCustomerId] = useState('')
   const [settlement, setSettlement] = useState<ExchangeSettlement>('none')
   const [note, setNote] = useState('')
-  const [history, setHistory] = useState<Array<{
-    id: number
-    exchangeNo: string
-    createdAt: number
-    customerName: string | null
-    totalIn: number
-    totalOut: number
-    difference: number
-    differenceSettlement: ExchangeSettlement
-    note: string | null
-  }>>([])
+  const [history, setHistory] = useState<ExchangeSummary[]>([])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -95,9 +90,15 @@ export default function ExchangesPage(): React.JSX.Element {
 
   function setQty(direction: ExchangeDirection, productId: number, qty: number): void {
     const upd = (lines: ExLine[]) =>
-      lines.map((l) =>
-        l.productId === productId ? { ...l, qty: Math.max(0, Math.round(qty) || 0) } : l
-      )
+      lines.map((l) => {
+        if (l.productId !== productId) return l
+        let q = Math.round(qty)
+        if (!Number.isFinite(q) || q < 0) q = 0
+        if (direction === 'in' && inLimits[productId] != null) {
+          q = Math.min(q, inLimits[productId])
+        }
+        return { ...l, qty: q }
+      })
     if (direction === 'in') setInLines(upd)
     else setOutLines(upd)
   }
@@ -118,6 +119,50 @@ export default function ExchangesPage(): React.JSX.Element {
 
   const effectiveSettlement: ExchangeSettlement =
     difference === 0 ? 'none' : settlement
+
+  function searchByReceipt(): void {
+    setError(null)
+    if (!receiptInput.trim()) return
+    setReceiptBusy(true)
+    void window.api
+      .salesFindByReceipt(receiptInput)
+      .then((sr) => {
+        if (!sr) {
+          setError('Fiş bulunamadı')
+          return
+        }
+        setOriginalSaleId(sr.sale.id)
+        const limits: Record<number, number> = {}
+        for (const it of sr.items) {
+          if (it.remainingQty > 0) limits[it.productId] = it.remainingQty
+        }
+        setInLimits(limits)
+        setInLines(
+          sr.items
+            .filter((i) => i.remainingQty > 0)
+            .map((i) => ({
+              productId: i.productId,
+              name: i.name,
+              barcode: i.barcode,
+              qty: 0,
+              unitPrice: i.unitPrice,
+              direction: 'in' as const
+            }))
+        )
+        if (sr.sale.customerName) {
+          const c = customers.find((x) => x.name === sr.sale.customerName)
+          if (c) setCustomerId(String(c.id))
+        }
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setReceiptBusy(false))
+  }
+
+  function clearReceipt(): void {
+    setOriginalSaleId(null)
+    setInLimits({})
+    setReceiptInput('')
+  }
 
   function complete(): void {
     setError(null)
@@ -153,6 +198,7 @@ export default function ExchangesPage(): React.JSX.Element {
     void window.api
       .exchangesComplete({
         customerId: customerId ? Number(customerId) : null,
+        originalSaleId,
         items,
         differenceSettlement: effectiveSettlement,
         note: note || undefined
@@ -164,6 +210,7 @@ export default function ExchangesPage(): React.JSX.Element {
         }
         setInLines([])
         setOutLines([])
+        clearReceipt()
         setCustomerId('')
         setSettlement('none')
         setNote('')
@@ -180,6 +227,42 @@ export default function ExchangesPage(): React.JSX.Element {
       </header>
 
       {error && <p className="error">{error}</p>}
+
+      <div className="panel">
+        <h3>
+          Fişten Yükle{' '}
+          {originalSaleId != null && (
+            <span className="muted" style={{ fontSize: '0.75rem' }}>
+              (satışa bağlı değişim — iade limitleri fişten gelir)
+            </span>
+          )}
+        </h3>
+        <div className="receipt-search">
+          <input
+            className="input"
+            placeholder="Fiş seri no (F-…); iade edilen ürünler gelen satıra yüklenir"
+            value={receiptInput}
+            onChange={(e) => setReceiptInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') searchByReceipt()
+            }}
+          />
+          <button className="btn" onClick={searchByReceipt} disabled={receiptBusy || !receiptInput.trim()}>
+            {receiptBusy ? '…' : 'Yükle'}
+          </button>
+          {originalSaleId != null && (
+            <button className="btn" onClick={clearReceipt}>
+              Fişten Bağımsızla
+            </button>
+          )}
+        </div>
+        {originalSaleId != null && (
+          <p className="muted" style={{ marginTop: '0.5rem' }}>
+            İade edilecek (gelen) kalemler bu fişin kalan miktarıyla sınırlanır. Bağlama zorunlu değil —
+            fişsiz de değişim yapabilirsiniz.
+          </p>
+        )}
+      </div>
 
       <div className="grid2">
         <LinePanel
@@ -293,7 +376,14 @@ export default function ExchangesPage(): React.JSX.Element {
             <tbody>
               {history.map((h) => (
                 <tr key={h.id}>
-                  <td>{h.exchangeNo}</td>
+                  <td>
+                    {h.exchangeNo}
+                    {h.originalReceiptNo && (
+                      <span className="muted block" style={{ fontSize: '0.7rem' }}>
+                        {h.originalReceiptNo}
+                      </span>
+                    )}
+                  </td>
                   <td>{formatDateTime(h.createdAt)}</td>
                   <td>{h.customerName ?? '—'}</td>
                   <td>{formatKurus(h.totalIn)}</td>

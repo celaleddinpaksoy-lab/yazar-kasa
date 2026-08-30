@@ -5,7 +5,8 @@ import type {
   Product,
   ReturnSummary,
   SaleForReturn,
-  SaleSummary
+  SaleSummary,
+  User
 } from '@shared/types'
 import { useDataVersion } from '../context/DataContext'
 import {
@@ -51,7 +52,7 @@ function settlementLabel(m: ReturnSummary['settlementMethod']): string {
   }
 }
 
-export default function ReturnsPage(): React.JSX.Element {
+export default function ReturnsPage({ role }: { role: User['role'] }): React.JSX.Element {
   const dataVer = useDataVersion()
   const [mode, setMode] = useState<'sale' | 'standalone'>('sale')
   const [sales, setSales] = useState<SaleSummary[]>([])
@@ -65,9 +66,16 @@ export default function ReturnsPage(): React.JSX.Element {
   const [note, setNote] = useState('')
   const [history, setHistory] = useState<ReturnSummary[]>([])
   const [search, setSearch] = useState('')
+  const [receiptInput, setReceiptInput] = useState('')
+  const [receiptBusy, setReceiptBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const isPersonnel = role === 'personel'
+  useEffect(() => {
+    if (isPersonnel) setMode('sale')
+  }, [isPersonnel])
 
   const load = useCallback(async () => {
     const [salesList, custList, returnList] = await Promise.all([
@@ -101,33 +109,54 @@ export default function ReturnsPage(): React.JSX.Element {
       : 0
   const effectiveCash = total - effectiveDebt
 
+  function applySale(sr: SaleForReturn): void {
+    setSelectedSale(sr)
+    if (sr.sale.customerName) {
+      const c = customers.find((x) => x.name === sr.sale.customerName)
+      if (c) setCustomerId(String(c.id))
+    }
+    setLines(
+      sr.items
+        .filter((i) => i.remainingQty > 0)
+        .map((i) => ({
+          productId: i.productId,
+          name: i.name,
+          barcode: i.barcode,
+          qty: 0,
+          unitPrice: i.unitPrice,
+          maxQty: i.remainingQty
+        }))
+    )
+    setDebtPart('')
+    setCashPart('')
+  }
+
   function pickSale(saleId: number): void {
     setError(null)
     setResult(null)
     void window.api
       .returnsSaleReturnable(saleId)
+      .then(applySale)
+      .catch((e) => setError(String(e)))
+  }
+
+  function searchByReceipt(): void {
+    setError(null)
+    setResult(null)
+    if (!receiptInput.trim()) return
+    setReceiptBusy(true)
+    void window.api
+      .salesFindByReceipt(receiptInput)
       .then((sr) => {
-        setSelectedSale(sr)
-        if (sr.sale.customerName) {
-          const c = customers.find((x) => x.name === sr.sale.customerName)
-          if (c) setCustomerId(String(c.id))
+        if (!sr) {
+          setError('Fiş bulunamadı')
+          return
         }
-        setLines(
-          sr.items
-            .filter((i) => i.remainingQty > 0)
-            .map((i) => ({
-              productId: i.productId,
-              name: i.name,
-              barcode: i.barcode,
-              qty: 0,
-              unitPrice: i.unitPrice,
-              maxQty: i.remainingQty
-            }))
-        )
-        setDebtPart('')
-        setCashPart('')
+        setMode('sale')
+        applySale(sr)
       })
       .catch((e) => setError(String(e)))
+      .finally(() => setReceiptBusy(false))
   }
 
   function selectAll(): void {
@@ -240,12 +269,14 @@ export default function ReturnsPage(): React.JSX.Element {
         <button className={`btn ${mode === 'sale' ? 'primary' : ''}`} onClick={() => setMode('sale')}>
           Satıştan İade
         </button>
-        <button
-          className={`btn ${mode === 'standalone' ? 'primary' : ''}`}
-          onClick={() => setMode('standalone')}
-        >
-          Sadece İade (fişsiz)
-        </button>
+        {!isPersonnel && (
+          <button
+            className={`btn ${mode === 'standalone' ? 'primary' : ''}`}
+            onClick={() => setMode('standalone')}
+          >
+            Sadece İade (fişsiz)
+          </button>
+        )}
       </div>
 
       <div className="grid2">
@@ -253,6 +284,20 @@ export default function ReturnsPage(): React.JSX.Element {
           {mode === 'sale' ? (
             <>
               <h3>Satıştan İade — Fiş Seç</h3>
+              <div className="receipt-search">
+                <input
+                  className="input"
+                  placeholder="Fiş seri no (F-…); yazıp Ara…"
+                  value={receiptInput}
+                  onChange={(e) => setReceiptInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') searchByReceipt()
+                  }}
+                />
+                <button className="btn" onClick={searchByReceipt} disabled={receiptBusy || !receiptInput.trim()}>
+                  {receiptBusy ? '…' : 'Ara'}
+                </button>
+              </div>
               <div className="ret-sales">
                 {sales.map((s) => (
                   <button

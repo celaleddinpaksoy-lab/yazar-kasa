@@ -5,7 +5,9 @@ import type {
   PurchaseDetail,
   PurchaseKind,
   PurchaseSummary,
-  Supplier
+  Supplier,
+  SupplierPayment,
+  SupplierWithBalance
 } from '@shared/types'
 import Modal from '../components/Modal'
 import { useDataVersion } from '../context/DataContext'
@@ -40,14 +42,19 @@ function kindLabel(k: PurchaseKind): string {
 export default function PurchasesPage({ role }: { role: Role }): React.JSX.Element {
   const isAdmin = role === 'admin'
   const dataVer = useDataVersion()
-  const [mode, setMode] = useState<'purchase' | 'supplier_return'>('purchase')
+  const [mode, setMode] = useState<'purchase' | 'supplier_return' | 'pay_only'>('purchase')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [balances, setBalances] = useState<SupplierWithBalance[]>([])
   const [supplierId, setSupplierId] = useState('')
   const [lines, setLines] = useState<PurchaseLine[]>([])
   const [paidAmount, setPaidAmount] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>('cash')
   const [note, setNote] = useState('')
   const [history, setHistory] = useState<PurchaseSummary[]>([])
+  const [payments, setPayments] = useState<SupplierPayment[]>([])
+  const [payAmount, setPayAmount] = useState('')
+  const [payMethod, setPayMethod] = useState<PaymentMethod>('cash')
+  const [payNote, setPayNote] = useState('')
   const [selected, setSelected] = useState<PurchaseDetail | null>(null)
   const [editTarget, setEditTarget] = useState<PurchaseDetail | null>(null)
   const [editItems, setEditItems] = useState<PurchaseLine[]>([])
@@ -56,12 +63,16 @@ export default function PurchasesPage({ role }: { role: Role }): React.JSX.Eleme
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
-    const [sList, pList] = await Promise.all([
+    const [sList, pList, payList, balList] = await Promise.all([
       window.api.suppliersList(),
-      window.api.purchasesList()
+      window.api.purchasesList(),
+      window.api.suppliersPayments(),
+      window.api.suppliersWithBalance()
     ])
     setSuppliers(sList)
     setHistory(pList)
+    setPayments(payList)
+    setBalances(balList)
   }, [dataVer])
 
   useEffect(() => {
@@ -265,6 +276,35 @@ export default function PurchasesPage({ role }: { role: Role }): React.JSX.Eleme
     return lines.filter((l) => l.name.toLocaleLowerCase('tr').includes(q))
   }
 
+  function doPay(): void {
+    setError(null)
+    if (!supplierId) {
+      setError('Ödeme için tedarikçi seçin')
+      return
+    }
+    const amount = tlToKurus(payAmount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Ödeme tutarı girin')
+      return
+    }
+    setBusy(true)
+    void window.api
+      .suppliersPay(Number(supplierId), {
+        amount,
+        date: todayInput(),
+        paymentMethod: payMethod,
+        note: payNote || undefined
+      })
+      .then(() => {
+        setPayAmount('')
+        setPayNote('')
+      })
+      .catch((e) => setError(String(e)))
+      .finally(() => setBusy(false))
+  }
+
+  const chosenBalance = balances.find((b) => b.id === Number(supplierId))?.balance
+
   return (
     <div className="page">
       <header className="page-head">
@@ -275,6 +315,12 @@ export default function PurchasesPage({ role }: { role: Role }): React.JSX.Eleme
             onClick={() => setMode('purchase')}
           >
             Alış (yeni mal girişi)
+          </button>
+          <button
+            className={`seg ${mode === 'pay_only' ? 'active' : ''}`}
+            onClick={() => setMode('pay_only')}
+          >
+            Sadece Ödeme
           </button>
           <button
             className={`seg danger-seg ${mode === 'supplier_return' ? 'active' : ''}`}
@@ -288,6 +334,51 @@ export default function PurchasesPage({ role }: { role: Role }): React.JSX.Eleme
       {error && <p className="error">{error}</p>}
 
       <div className="grid2">
+        {mode === 'pay_only' ? (
+        <div className="panel">
+          <h3>Sadece Ödeme</h3>
+          <div className="form-col">
+            <label className="form-field">
+              Tedarikçi (zorunlu)
+              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">Tedarikçi seçin…</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              {chosenBalance != null && (
+                <span className={`bal ${chosenBalance > 0 ? 'debt' : 'ok'}`}>
+                  Güncel borç: {formatKurus(chosenBalance)}
+                </span>
+              )}
+            </label>
+            <label className="form-field">
+              Ödeme Tutarı (TL)
+              <input value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0,00" />
+            </label>
+            <div className="btn-group">
+              {(['cash', 'card', 'transfer'] as PaymentMethod[]).map((m) => (
+                <button
+                  key={m}
+                  className={`seg ${payMethod === m ? 'active' : ''}`}
+                  onClick={() => setPayMethod(m)}
+                >
+                  {paymentMethodLabel(m)}
+                </button>
+              ))}
+            </div>
+            <label className="form-field">
+              Not
+              <input value={payNote} onChange={(e) => setPayNote(e.target.value)} />
+            </label>
+            <button className="btn primary complete-btn" onClick={doPay} disabled={busy || !isAdmin}>
+              {isAdmin ? (busy ? 'İşleniyor…' : 'Ödemeyi Kaydet') : 'Yalnızca yönetici yapabilir'}
+            </button>
+          </div>
+        </div>
+        ) : (
         <div className="panel">
           <h3>
             {mode === 'purchase' ? 'Alış Kalemleri' : 'İade Kalemleri'}{' '}
@@ -404,8 +495,44 @@ export default function PurchasesPage({ role }: { role: Role }): React.JSX.Eleme
             </button>
           </div>
         </div>
+        )}
 
         <div className="panel">
+          {mode === 'pay_only' ? (
+            <>
+              <h3>Tedarikçi Ödemeleri</h3>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Tedarikçi</th>
+                    <th>Tutar</th>
+                    <th>Yöntem</th>
+                    <th>Not</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id}>
+                      <td>{formatDate(new Date(p.date + 'T00:00:00').getTime())}</td>
+                      <td>{p.supplierName}</td>
+                      <td className="debt">-{formatKurus(p.amount)}</td>
+                      <td>{paymentMethodLabel(p.paymentMethod)}</td>
+                      <td>{p.note ?? '—'}</td>
+                    </tr>
+                  ))}
+                  {payments.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="muted">
+                        Henüz ödeme yok.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <>
           <h3>Alış Geçmişi</h3>
           <table className="table">
             <thead>
@@ -452,6 +579,8 @@ export default function PurchasesPage({ role }: { role: Role }): React.JSX.Eleme
               )}
             </tbody>
           </table>
+            </>
+          )}
         </div>
       </div>
 

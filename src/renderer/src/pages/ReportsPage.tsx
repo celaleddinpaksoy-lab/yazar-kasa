@@ -131,11 +131,6 @@ export default function ReportsPage(): React.JSX.Element {
                 <span className="mini-sub">tahsilat: {formatKurus(report.collectedDebt)}</span>
               </div>
               <div className="mini-stat">
-                <span className="mini-label">Kasadan Çıkış</span>
-                <span className="mini-value danger">-{formatKurus(report.cashExpense)}</span>
-                <span className="mini-sub">alış + tedarikçi + iade</span>
-              </div>
-              <div className="mini-stat">
                 <span className="mini-label">Alışlar</span>
                 <span className="mini-value">{formatKurus(report.purchaseTotal)}</span>
                 <span className="mini-sub">{report.purchaseCount} alış, {

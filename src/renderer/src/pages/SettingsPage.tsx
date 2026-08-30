@@ -16,7 +16,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export default function SettingsPage(): React.JSX.Element {
+export default function SettingsPage({ role }: { role: User['role'] }): React.JSX.Element {
   const dataVer = useDataVersion()
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [user, setUser] = useState<User | null>(null)
@@ -202,65 +202,67 @@ export default function SettingsPage(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="panel">
-        <div className="panel-row">
-          <h3>Yedekleme</h3>
-          <div className="btn-group">
-            <button className="btn primary" onClick={doManualBackup} disabled={backupBusy || !isAdmin}>
-              {backupBusy ? 'Çalışıyor…' : 'Yedek Al'}
-            </button>
-            <label className="btn">
-              Dosyadan İçe Aktar
-              <input type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" hidden onChange={onImportFile} />
-            </label>
+      {role === 'admin' && (
+        <div className="panel">
+          <div className="panel-row">
+            <h3>Yedekleme</h3>
+            <div className="btn-group">
+              <button className="btn primary" onClick={doManualBackup} disabled={backupBusy || !isAdmin}>
+                {backupBusy ? 'Çalışıyor…' : 'Yedek Al'}
+              </button>
+              <label className="btn">
+                Dosyadan İçe Aktar
+                <input type="file" accept=".db,.sqlite,.sqlite3,application/octet-stream" hidden onChange={onImportFile} />
+              </label>
+            </div>
           </div>
-        </div>
-        <p className="muted">
-          Uygulama her açılışta günde bir kez <strong>otomatik yedek</strong> alır (en son 30 tutulur). Manuel yedek
-          tek tıkla alınır. Yedekler uygulamanın veri klasöründe <span className="mono small">backups/</span> altında
-          SQLite dosyası olarak saklanır.
-        </p>
+          <p className="muted">
+            Uygulama her açılışta günde bir kez <strong>otomatik yedek</strong> alır (en son 30 tutulur). Manuel yedek
+            tek tıkla alınır. Yedekler uygulamanın veri klasöründe <span className="mono small">backups/</span> altında
+            SQLite dosyası olarak saklanır.
+          </p>
 
-        {!isAdmin && <p className="muted">Sadece yönetici yedek alabilir / geri yükleyebilir.</p>}
+          {!isAdmin && <p className="muted">Sadece yönetici yedek alabilir / geri yükleyebilir.</p>}
 
-        {backups.length === 0 ? (
-          <p className="muted">Henüz yedek yok.</p>
-        ) : (
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Tarih</th>
-                <th>Tür</th>
-                <th>Boyut</th>
-                <th>Kaydeden</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {backups.map((b) => (
-                <tr key={b.id}>
-                  <td>{formatDateTime(b.createdAt)}</td>
-                  <td>
-                    <span className="badge">{KIND_LABEL[b.kind]}</span>{' '}
-                    <span className="mono small">{b.filename}</span>
-                  </td>
-                  <td>{formatSize(b.size)}</td>
-                  <td>{b.createdByName ?? '-'}</td>
-                  <td className="row-actions">
-                    <button
-                      className="btn small"
-                      disabled={!isAdmin || backupBusy}
-                      onClick={() => doRestore(b)}
-                    >
-                      Geri Yükle
-                    </button>
-                  </td>
+          {backups.length === 0 ? (
+            <p className="muted">Henüz yedek yok.</p>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Tarih</th>
+                  <th>Tür</th>
+                  <th>Boyut</th>
+                  <th>Kaydeden</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {backups.map((b) => (
+                  <tr key={b.id}>
+                    <td>{formatDateTime(b.createdAt)}</td>
+                    <td>
+                      <span className="badge">{KIND_LABEL[b.kind]}</span>{' '}
+                      <span className="mono small">{b.filename}</span>
+                    </td>
+                    <td>{formatSize(b.size)}</td>
+                    <td>{b.createdByName ?? '-'}</td>
+                    <td className="row-actions">
+                      <button
+                        className="btn small"
+                        disabled={!isAdmin || backupBusy}
+                        onClick={() => doRestore(b)}
+                      >
+                        Geri Yükle
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       <div className="panel">
         <h3>Uzaktan Güncelleme</h3>

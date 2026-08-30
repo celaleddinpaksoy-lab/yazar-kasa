@@ -274,16 +274,6 @@ export function periodReport(from: number, to: number): PeriodReport {
        WHERE date BETWEEN ? AND ? AND kind IN ('sale', 'manual', 'exchange')`
     )
     .get(fmtDate(new Date(from)), fmtDate(new Date(to - 1))) as { t: number }
-  const expense = db
-    .prepare(
-      `SELECT COALESCE(SUM(amount), 0) AS t FROM sale_payments WHERE date BETWEEN ? AND ? AND kind = 'expense'`
-    )
-    .get(fmtDate(new Date(from)), fmtDate(new Date(to - 1))) as { t: number }
-  const refund = db
-    .prepare(
-      `SELECT COALESCE(SUM(amount), 0) AS t FROM return_payments WHERE date BETWEEN ? AND ? AND kind = 'refund'`
-    )
-    .get(fmtDate(new Date(from)), fmtDate(new Date(to - 1))) as { t: number }
   const collectedDebt = db
     .prepare(
       `SELECT COALESCE(SUM(amount), 0) AS t FROM debt_movements
@@ -330,7 +320,6 @@ export function periodReport(from: number, to: number): PeriodReport {
     netRevenue: sales.t - returns.t + exchangeNet,
     profit,
     moneyIn: moneyIn.t,
-    cashExpense: expense.t + refund.t,
     collectedDebt: collectedDebt.t,
     purchaseTotal: purchase.t,
     purchaseCount: purchase.c,
@@ -432,8 +421,7 @@ export function dashboardSummary(): DashboardSummary {
       profit: today.profit,
       returnTotal: today.returnTotal,
       exchangeNet: today.exchangeNet,
-      moneyIn: today.moneyIn,
-      cashExpense: today.cashExpense
+      moneyIn: today.moneyIn
     },
     lowStock: lowStock(),
     customerReceivableTotal: received.t,

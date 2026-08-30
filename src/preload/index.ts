@@ -65,6 +65,7 @@ const api: AppApi = {
   cashList: () => ipcRenderer.invoke('cash:list'),
   returnsSales: () => ipcRenderer.invoke('returns:sales'),
   returnsSaleReturnable: (saleId: number) => ipcRenderer.invoke('returns:saleReturnable', saleId),
+  salesFindByReceipt: (receiptNo: string) => ipcRenderer.invoke('sales:findByReceipt', receiptNo),
   returnsComplete: (input: CompleteReturnPayload) => ipcRenderer.invoke('returns:complete', input),
   returnsList: () => ipcRenderer.invoke('returns:list'),
   exchangesComplete: (input: CompleteExchangePayload) =>
@@ -81,6 +82,7 @@ const api: AppApi = {
     ipcRenderer.invoke('suppliers:debtAdd', id, input),
   suppliersPay: (id: number, input: SupplierPayInput) =>
     ipcRenderer.invoke('suppliers:pay', id, input),
+  suppliersPayments: () => ipcRenderer.invoke('suppliers:payments'),
   suppliersMovementEdit: (movementId: number, input: SupplierMovementInput) =>
     ipcRenderer.invoke('suppliers:movementEdit', movementId, input),
   suppliersMovementRemove: (movementId: number) =>

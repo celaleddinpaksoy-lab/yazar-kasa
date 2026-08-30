@@ -9,6 +9,7 @@ import type {
   SupplierMovement,
   SupplierMovementInput,
   SupplierPayInput,
+  SupplierPayment,
   SupplierWithBalance
 } from '@shared/types'
 
@@ -81,6 +82,42 @@ export function listSuppliers(): Supplier[] {
 export function listSuppliersWithBalance(): SupplierWithBalance[] {
   const rows = listSuppliers()
   return rows.map((s) => ({ ...s, balance: getSupplierBalance(s.id) })).sort((a, b) => b.balance - a.balance)
+}
+
+export function listSupplierPayments(): SupplierPayment[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT pp.id, pp.supplier_id, pp.date, pp.amount, pp.payment_method, pp.note, pp.is_manual, pp.created_at,
+              s.name AS supplier_name, u.name AS created_by_name
+       FROM purchase_payments pp
+       LEFT JOIN suppliers s ON s.id = pp.supplier_id
+       LEFT JOIN users u ON u.id = pp.created_by
+       ORDER BY pp.created_at DESC LIMIT 100`
+    )
+    .all() as Array<{
+    id: number
+    supplier_id: number
+    date: string
+    amount: number
+    payment_method: PaymentMethod
+    note: string | null
+    is_manual: number
+    created_at: number
+    supplier_name: string
+    created_by_name: string | null
+  }>
+  return rows.map((r) => ({
+    id: r.id,
+    supplierId: r.supplier_id,
+    supplierName: r.supplier_name,
+    date: r.date,
+    amount: r.amount,
+    paymentMethod: r.payment_method,
+    note: r.note,
+    isManual: r.is_manual,
+    createdByName: r.created_by_name,
+    createdAt: r.created_at
+  }))
 }
 
 export function createSupplier(input: SupplierInput): Supplier {
