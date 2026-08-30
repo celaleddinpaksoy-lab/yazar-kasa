@@ -74,29 +74,49 @@ function createWindow(): BrowserWindow {
   return mainWindow
 }
 
+// Süreç en başında log — `whenReady` çalışmasa bile bu satır yazılır;
+// "uygulama çalışıyor ama pencere açılmıyor" vakasında ana sürecin hangi
+// aşamaya geldiği bu logdan birebir okunur.
+try {
+  appendFileSync(join(app.getPath('userData'), 'runtime.log'), `[${new Date().toISOString()}] [main] süreç başladı\n`, 'utf8')
+} catch {
+  // klasör/userData hazır değilse sessiz geç; aşağıdaki try/catch'ler yine yazar
+}
+logLine('[main] main modülü yüklendi, tek örnek kontrolü yapılıyor')
+
 // Tek örnek: görev yöneticisinde arka planda sürüklenen eski bir işlem
 // varken yeni başlatma işlem yapar; ikinci örnek kendi penceresini açıp
 // mevcut pencereyi öne getirir, çifte/boş işlem yığını oluşmaz.
 const hasLock = app.requestSingleInstanceLock()
 
 if (!hasLock) {
+  logLine('[main] tek örnek kilidi alınamadı, süreç kapatılıyor (ikinci örnek)')
   app.quit()
 } else {
   app.on('second-instance', () => {
-    const win = BrowserWindow.getAllWindows()[0]
+    logLine('[main] ikinci örnek algılandı — mevcut pencere öne getiriliyor')
+    const win = BrowserWindow.getAllWindows().find(
+      (w) => !w.isDestroyed() && !w.isMinimized() && w.isVisible()
+    )
     if (win) {
       if (win.isMinimized()) win.restore()
       win.show()
       win.focus()
+    } else if (app.isReady()) {
+      logLine('[main] görünür pencere yok, yeni pencere açılıyor')
+      createWindow()
     }
   })
 
   app.whenReady().then(() => {
+    logLine('[main] app.ready oldu, veritabanı başlatılıyor')
     initDatabase()
+    logLine('[main] veritabanı hazır, IPC/güncelleme/yedek kuruluyor')
     registerIpcHandlers()
     setupAutoUpdater()
     scheduleDailyAutoBackup()
 
+    logLine('[main] pencere oluşturuluyor')
     createWindow()
 
     app.on('activate', () => {
