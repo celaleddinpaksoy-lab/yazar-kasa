@@ -9,8 +9,11 @@ export const BACKUPS_DIR = 'backups'
 /**
  * Veri dizini her makinede işletim sisteminin kullanıcı veri klasörüdür (userData).
  * Asla proje/derleme yoluna sabitlenmez — taşınabilir dağıtım bu sayede güvenlidir.
+ * `YAZAR_KASA_DATA_DIR` ortam değişkeni verilirse (testler, taşınabilir/yedek
+ * taşıma senaryoları) o yol kullanılır.
  */
 export function getDataDir(): string {
+  if (process.env.YAZAR_KASA_DATA_DIR) return process.env.YAZAR_KASA_DATA_DIR
   return app.getPath('userData')
 }
 

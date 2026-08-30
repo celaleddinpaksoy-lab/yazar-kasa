@@ -92,7 +92,7 @@ export function listSupplierPayments(): SupplierPayment[] {
        FROM purchase_payments pp
        LEFT JOIN suppliers s ON s.id = pp.supplier_id
        LEFT JOIN users u ON u.id = pp.created_by
-       ORDER BY pp.created_at DESC LIMIT 100`
+       ORDER BY pp.created_at DESC, pp.id DESC LIMIT 100`
     )
     .all() as Array<{
     id: number

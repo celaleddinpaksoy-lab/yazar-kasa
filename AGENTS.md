@@ -20,7 +20,7 @@ Yazar kasa (POS) + stok + borç/taksit + alacak-verecek defteri. Electron ^44 ·
 - `npm run build:win` / `build:mac` / `build:linux` — electron-builder dağıtım paketi (`release/`)
 - `npm run rebuild` — native modülü Electron ABI'sine yeniden derler (better-sqlite3; electron sürümü değişince gerekir)
 - `npm install` → `postinstall` (electron-builder install-app-deps) native'i otomatik yeniden derler
-- ⚠️ **`npm test` kırık:** `vitest` bağımlılığı kurulu değil, commit'li test yok (`vitest: command not found`). Doğrulama için yukarıdaki typecheck + elle dev kontrol kullan; test düzeltmeden "npm test"e güvenme.
+- `npm test` — vitest servis testleri (geçici veri dizininde çalışır, Electron/veriye dokunmaz; `tests/`)
 - Dev açılışta "Electron uninstall" hatası → `node node_modules/electron/install.js` (ikil inmişmedi).
 
 ## Mimari
@@ -54,4 +54,6 @@ Yazar kasa (POS) + stok + borç/taksit + alacak-verecek defteri. Electron ^44 ·
 - Veri taşıma/saklama: yedek al → dosya → hedef makinede içe aktar/geri yükle. DB her makinede çalışma zamanında `userData` altında oluşur.
 
 ## Doğrulama rutini
-- Her değişiklikten sonra `npm run typecheck`; mantıklıysa `npm run build` ve `npm run dev` ile elle kontrol. Commit'li test yok (yukarıya bak).
+- Her değişiklikten sonra `npm run typecheck`; mantıklıysa `npm run build` ve `npm run dev` ile elle kontrol. `npm test` servis düzeyinde hızlı doğrulama sağlar (satış/stok, iade+değişim ortak limit, tedarikçi bakiyesi, fiş arama, v5 migrasyonu).
+- Testler `tests/helpers.ts` üzerinden `YAZAR_KASA_DATA_DIR` ile geçici dizine veri yazar (dosya başına worker izolasyonu) ve bitince temizler; üretim verisine dokunmaz.
+- `npm test` ve `npm run dev`/paketlenmiş uygulama aynı `better-sqlite3` build'ini kullanır (Node v22 ABI = Electron 44 ABI; `npm install` postinstall ikisini de taze tutar).
